@@ -19,14 +19,16 @@ def rmsle(y, y_,convertExp=True):
 def plot_learing_curves(model, X, y):
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
     train_errors, val_errors = [],[]
-    for i in range(1,len(X_train)):
+    estimators = []
+    for i in range(1,len(X_train),100):
+        estimators.append(i)
         model.fit(X_train[:i],y_train[:i])
         predict_train = model.predict(X_train)
         predict_test = model.predict(X_test)
-        train_errors.append(rmsle(predict_train, y_train))
-        val_errors.append(rmsle(predict_test,y_test))
-    plt.plot(range(1,len(X_train)),train_errors,"b--",label="Train RMSLE")
-    plt.plot(range(1,len(X_train)),val_errors,"g-", label="Test RMSLE")
+        train_errors.append(rmsle(predict_train, y_train, False))
+        val_errors.append(rmsle(predict_test,y_test, False))
+    plt.plot(estimators,train_errors,"b--",label="Train RMSLE")
+    plt.plot(estimators,val_errors,"g-", label="Test RMSLE")
     plt.xlabel("Sample Nums")
     plt.ylabel("RMSLE")
     plt.legend(loc="best")
@@ -61,14 +63,21 @@ for item in ['season','weather','year','month','weekday','hour']:
     data_prepare[item] = data_prepare[item].astype('category')
 
 data_prepare_train = data_prepare.loc[pd.notnull(data_prepare['count'])]
-data_prepare_test = data_prepare.loc[pd.isnull(data_prepare['count'])]
+data_prepare_test = data_prepare.loc[pd.isnull(data_prepare['count'])].sort_values(by=['datetime'])
 data_prepare_train_y = data_prepare_train.loc[:,'count']
 data_prepare_train_X = data_prepare_train.drop(columns=['datetime','casual','registered','count'])
 data_prepare_test_X = data_prepare_test.drop(columns=['datetime','casual','registered','count'])
 
 data_rfr = RandomForestRegressor()
-plot_learing_curves(data_rfr, data_prepare_train_X, data_prepare_train_y)
+data_rfr.fit(data_prepare_train_X, data_prepare_train_y)
+data_prepare_test_predict = data_rfr.predict(data_prepare_test_X)
+submission = pd.DataFrame({
+    "datetime": data_prepare_test['datetime'],
+    "count" : data_prepare_test_predict
+    })
+submission.to_csv('data/submission.csv', index=False)
 
+# plot_learing_curves(data_rfr, data_prepare_train_X, data_prepare_train_y)
 # print(data_prepare_train.info())
 # print(data_prepare_test.info())
 # print(data_prepare.info())
