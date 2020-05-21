@@ -4,12 +4,15 @@ from datetime import datetime
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.model_selection import train_test_split
 import matplotlib.pyplot as plt
+import seaborn as sn
+import warnings
+warnings.filterwarnings('ignore')
 
 
 def rmsle(y, y_,convertExp=True):
     if convertExp:
-        y = np.exp(y),
-        y_ = np.exp(y_)
+        y = np.expm1(y),
+        y_ = np.expm1(y_)
     log1 = np.nan_to_num(np.array([np.log(v + 1) for v in y]))
     log2 = np.nan_to_num(np.array([np.log(v + 1) for v in y_]))
     calc = (log1 - log2) ** 2
@@ -25,8 +28,8 @@ def plot_learing_curves(model, X, y):
         model.fit(X_train[:i],y_train[:i])
         predict_train = model.predict(X_train)
         predict_test = model.predict(X_test)
-        train_errors.append(rmsle(predict_train, y_train, False))
-        val_errors.append(rmsle(predict_test,y_test, False))
+        train_errors.append(rmsle(predict_train, y_train))
+        val_errors.append(rmsle(predict_test,y_test))
     plt.plot(estimators,train_errors,"b--",label="Train RMSLE")
     plt.plot(estimators,val_errors,"g-", label="Test RMSLE")
     plt.xlabel("Sample Nums")
@@ -64,18 +67,25 @@ for item in ['season','weather','year','month','weekday','hour']:
 
 data_prepare_train = data_prepare.loc[pd.notnull(data_prepare['count'])]
 data_prepare_test = data_prepare.loc[pd.isnull(data_prepare['count'])].sort_values(by=['datetime'])
-data_prepare_train_y = data_prepare_train.loc[:,'count']
-data_prepare_train_X = data_prepare_train.drop(columns=['datetime','casual','registered','count'])
-data_prepare_test_X = data_prepare_test.drop(columns=['datetime','casual','registered','count'])
+# 对异常值进行平滑处理，避免建模时异常值对模型影响过大（log1p）
+# 预测时需要对预测结果进行逆处理（expm1）
+data_prepare_train_y = np.log1p(data_prepare_train.loc[:,'count'])
+data_prepare_train_X = data_prepare_train.drop(columns=['datetime','casual','registered','count','temp'])
+data_prepare_test_X = data_prepare_test.drop(columns=['datetime','casual','registered','count','temp'])
+
+# # 绘制热力图以寻找特征之间的相关性
+# ax = sn.heatmap(data_prepare_train.corr(), annot=True, square=True)
+# plt.show()
 
 data_rfr = RandomForestRegressor()
 data_rfr.fit(data_prepare_train_X, data_prepare_train_y)
 data_prepare_test_predict = data_rfr.predict(data_prepare_test_X)
 submission = pd.DataFrame({
     "datetime": data_prepare_test['datetime'],
-    "count" : data_prepare_test_predict
+    "count" : [max(0, i) for i in np.expm1(data_prepare_test_predict)]
     })
 submission.to_csv('data/submission.csv', index=False)
+
 
 # plot_learing_curves(data_rfr, data_prepare_train_X, data_prepare_train_y)
 # print(data_prepare_train.info())
